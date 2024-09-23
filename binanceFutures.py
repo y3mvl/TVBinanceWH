@@ -50,7 +50,7 @@ class BinanceBot:
         # generating random strings
         res = ''.join(random.choices(string.ascii_uppercase +
                                      string.digits, k=N))
-        baseId = 'x-40PTWbMI'
+        baseId = 'y-20TVbiWH'
         self.clientId = baseId + str(res)
         return
 
