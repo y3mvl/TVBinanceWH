@@ -6,3 +6,4 @@
 .idea/Tradingview-Webhook-Bot.iml
 .idea/vcs.xml
 .vscode/
+__pycache__/

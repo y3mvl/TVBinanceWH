@@ -1,12 +1,14 @@
 import os
 
-WEBHOOK_PASSPHRASE=os.environ.get("WEBHOOK_PASSPHRASE")
+KEY = os.environ.get("WEBHOOK_PASSPHRASE")
 
 BINANCE_ENABLED = False
+BINANCE_TESTNET = False
+BINANCE_API_KEY = ''
+BINANCE_API_SECRET = ''
 if (os.environ.get("BINANCE_ENABLED") == 'Y'):
   BINANCE_ENABLED = True
 
-  BINANCE_TESTNET = False
   if (os.environ.get("BINANCE_TESTNET") == 'Y'):
     BINANCE_TESTNET = True
 

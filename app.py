@@ -47,7 +47,7 @@ def webhook():
     data = json.loads(request.data)
     print(data)
 
-    if int(data['key']) != config['KEY']:
+    if data['key'] != config.KEY:
         print("Invalid Key, Please Try Again!")
         return {
             "status": "error",
