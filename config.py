@@ -15,5 +15,6 @@ if (os.environ.get("BINANCE_ENABLED") == 'Y'):
   BINANCE_API_KEY=os.environ.get("API_KEY")
   BINANCE_API_SECRET=os.environ.get("API_SECRET")
 
+print(os.environ);
 print(BINANCE_ENABLED);
 print(os.environ.get("BINANCE_ENABLED"));
