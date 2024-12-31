@@ -41,7 +41,7 @@ else:
 
 class BinanceBot:
 
-    def __int__(self):
+    def __init__(self):
         pass
 
     def create_string(self):
@@ -55,7 +55,9 @@ class BinanceBot:
         return
 
     def close_position(self, symbol):
-        position = exchange.fetch_positions(symbol)[0]['info']['positionAmt']
+        positions = exchange.fetch_positions(symbol)
+        if positions:
+            position = positions[0].get('positionAmt', 0)
         self.create_string()
         params = {
             "newClientOrderId": self.clientId,
