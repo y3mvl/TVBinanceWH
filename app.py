@@ -34,7 +34,6 @@ if config.BINANCE_ENABLED:
                 'private': 'https://testnet.binancefuture.com/fapi/v1',
             }, }
         })
-        exchange.set_sandbox_mode(True)
 
 @app.route('/')
 def index():
