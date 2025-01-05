@@ -72,6 +72,19 @@ def webhook():
             "message": "Invalid Exchange, Please Try Again!"
         }
 
+@app.route('/balance', methods=['GET'])
+def get_balance():
+    asset = request.args.get('asset', 'USDT')
+    balance = get_balance(asset)
+    return jsonify({"asset": asset, "balance": balance})
+
+@app.route('/fullbalance', methods=['GET'])
+def get_full_balance():
+     balance = exchange.fetch_balance()
+    #print(json.dumps(balance, indent=4))
+    return jsonify({"balance": balance})
+
+
 if __name__ == '__main__':
     app.run(debug=False)
 

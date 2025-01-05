@@ -260,3 +260,18 @@ class BinanceBot:
                     return {
                         'status': 'error'
                     }
+
+    def get_balance(asset='USDT'):
+        balance = exchange.fetch_balance()
+        futures_balance = balance['total']
+    
+        if asset in futures_balance:
+            print(f"{asset} Balance: {futures_balance[asset]}")
+            return futures_balance[asset]
+        else:
+            print(f"{asset} not found in account balance.")
+            return 0
+
+    def get_full_balance():
+        balance = exchange.fetch_balance()
+        print(json.dumps(balance, indent=4))
