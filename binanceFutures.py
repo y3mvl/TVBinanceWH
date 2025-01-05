@@ -140,6 +140,7 @@ class BinanceBot:
 
 
     def run(self, data):
+        close_position = data.get('close_position', 'False') 
         print(data['close_position'])
         if data['close_position'] == 'True':
             print("Closing Position")
