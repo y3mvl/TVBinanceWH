@@ -53,6 +53,14 @@ class BinanceBot:
         baseId = 'y-20TVbiWH'
         self.clientId = baseId + str(res)
         return
+    
+    # Calculate contract size based on USD value
+    def calculate_qty(symbol, usd_amount):
+        ticker = exchange.fetch_ticker(symbol)
+        current_price = ticker['last']
+        qty = round(float(usd_amount) / current_price, 3)  # Round to 3 decimals
+        return qty
+
 
     def close_position(self, symbol):
         positions = exchange.fetch_positions(symbol)
@@ -156,6 +164,12 @@ class BinanceBot:
                 else:
                     price = 0
 
+                # Calculate qty based on USD if 'qty' is interpreted as USD value
+                if 'usd_value' in data:
+                    qty = calculate_qty(data['symbol'], data['usd_value'])
+                else:
+                    qty = float(data['qty'])
+                    
                 if data['order_mode'] == 'Both':
                     take_profit_percent = float(data['take_profit_percent']) / 100
                     stop_loss_percent = float(data['stop_loss_percent']) / 100
@@ -178,10 +192,10 @@ class BinanceBot:
                         'reduceOnly': False
                     }
                     if data['type'] == 'Limit':
-                        exchange.create_order(data['symbol'], data['type'], data['side'], float(data['qty']),
+                        exchange.create_order(data['symbol'], data['type'], data['side'], qty,
                                               price=float(price), params=params)
                     else:
-                        exchange.create_order(data['symbol'], data['type'], data['side'], float(data['qty']),
+                        exchange.create_order(data['symbol'], data['type'], data['side'], qty,
                                               params=params)
 
                     self.set_risk(data['symbol'], data, stop_loss_price, take_profit_price)
@@ -207,10 +221,10 @@ class BinanceBot:
                     }
 
                     if data['type'] == 'Limit':
-                        exchange.create_order(data['symbol'], data['type'], data['side'], float(data['qty']),
+                        exchange.create_order(data['symbol'], data['type'], data['side'], qty,
                                               price=float(price), params=params)
                     else:
-                        exchange.create_order(data['symbol'], data['type'], data['side'], float(data['qty']),
+                        exchange.create_order(data['symbol'], data['type'], data['side'], qty,
                                               params=params)
 
                     self.set_risk(data['symbol'], data, 0, take_profit_price)
@@ -234,10 +248,10 @@ class BinanceBot:
                     }
 
                     if data['type'] == 'Limit':
-                        exchange.create_order(data['symbol'], data['type'], data['side'], float(data['qty']),
+                        exchange.create_order(data['symbol'], data['type'], data['side'], qty,
                                               price=float(price), params=params)
                     else:
-                        exchange.create_order(data['symbol'], data['type'], data['side'], float(data['qty']),
+                        exchange.create_order(data['symbol'], data['type'], data['side'], qty,
                                               params=params)
 
                     self.set_risk(data['symbol'], data, stop_loss_price, 0)
