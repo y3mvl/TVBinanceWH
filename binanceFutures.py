@@ -5,273 +5,285 @@ import ccxt
 import random
 import string
 
-'''
-with open('config.json') as config_file:
-    config = json.load(config_file)
-'''
-
-if config.BINANCE_TESTNET:
-    exchange = ccxt.binance({
-        'apiKey': config.BINANCE_API_KEY,
-        'secret': config.BINANCE_API_SECRET,
-        'options': {
-            'defaultType': 'future',
-        },
-        'urls': {
-            'api': {
-                'public': 'https://testnet.binancefuture.com/fapi/v1',
-                'private': 'https://testnet.binancefuture.com/fapi/v1',
-            }, }
-    })
-    exchange.set_sandbox_mode(True)
-else:
-    exchange = ccxt.binance({
-        'apiKey': config.BINANCE_API_KEY,
-        'secret': config.BINANCE_API_SECRET,
-        'options': {
-            'defaultType': 'future',
-        },
-        'urls': {
-            'api': {
-                'public': 'https://fapi.binance.com/fapi/v1',
-                'private': 'https://fapi.binance.com/fapi/v1',
-            }, }
-    })
-
-
 class BinanceBot:
-
     def __init__(self):
-        pass
+        if config.BINANCE_TESTNET:
+            self.exchange = ccxt.binance({
+                'apiKey': config.BINANCE_API_KEY,
+                'secret': config.BINANCE_API_SECRET,
+                'options': {
+                    'defaultType': 'future',
+                },
+                'urls': {
+                    'api': {
+                        'public': 'https://testnet.binancefuture.com/fapi/v1',
+                        'private': 'https://testnet.binancefuture.com/fapi/v1',
+                    }, }
+            })
+            self.exchange.set_sandbox_mode(True)
+        else:
+            self.exchange = ccxt.binance({
+                'apiKey': config.BINANCE_API_KEY,
+                'secret': config.BINANCE_API_SECRET,
+                'options': {
+                    'defaultType': 'future',
+                },
+                'urls': {
+                    'api': {
+                        'public': 'https://fapi.binance.com/fapi/v1',
+                        'private': 'https://fapi.binance.com/fapi/v1',
+                    }, }
+            })
+        self.clientId = None
 
     def create_string(self):
         N = 7
-        # using random.choices()
-        # generating random strings
-        res = ''.join(random.choices(string.ascii_uppercase +
-                                     string.digits, k=N))
+        res = ''.join(random.choices(string.ascii_uppercase + string.digits, k=N))
         baseId = 'y-20TVbiWH'
         self.clientId = baseId + str(res)
         return
-    
-    # Calculate contract size based on USD value
-    def calculate_qty(symbol, usd_amount):
-        ticker = exchange.fetch_ticker(symbol)
-        current_price = ticker['last']
-        qty = round(float(usd_amount) / current_price, 3)  # Round to 3 decimals
-        return qty
 
+    def calculate_qty(self, symbol, usd_amount):
+        try:
+            ticker = self.exchange.fetch_ticker(symbol)
+            current_price = ticker['last']
+            qty = round(float(usd_amount) / current_price, 3)
+            return qty
+        except Exception as e:
+            print(f"Error calculating qty: {e}")
+            return 0
 
     def close_position(self, symbol):
-        positions = exchange.fetch_positions(symbol)
-        if positions:
-            position = positions[0].get('positionAmt', 0)
-        self.create_string()
-        params = {
-            "newClientOrderId": self.clientId,
-            'reduceOnly': True
-        }
-        if float(position) > 0:
-            print("Closing Long Position")
-            exchange.create_order(symbol, 'Market', 'Sell', float(position), price=None, params=params)
-        else:
-            print("Closing Short Position")
-            exchange.create_order(symbol, 'Market', 'Buy', -float(position), price=None, params=params)
-
-    def set_risk(self, symbol, data, stop_loss, take_profit):
-        position = exchange.fetch_positions(symbol)
-        print(position)
-        price = float(position[0]['info']['entryPrice'])
-        size = abs(float(position[0]['info']['positionAmt']))
-        markPrice = float(exchange.fetch_ticker(data['symbol'])['last'])
-
-        if data['order_mode'] == 'Both':
-            if data['side'] == 'Buy':
-                self.create_string()
-                exchange.create_order(symbol, 'STOP_MARKET', 'Sell', size, params={
-                    "newClientOrderId": self.clientId,
-                    'reduceOnly': True,
-                    'stopPrice': stop_loss,
-                })
-                self.create_string()
-                exchange.create_order(symbol, 'TAKE_PROFIT', 'Sell', size, params={
-                    "newClientOrderId": self.clientId,
-                    'reduceOnly': True,
-                    'stopPrice': take_profit,
-                })
+        try:
+            positions = self.exchange.fetch_positions(symbol)
+            if positions:
+                position = positions[0].get('positionAmt', 0)
             else:
-                self.create_string()
-                exchange.create_order(symbol, 'STOP_MARKET', 'Buy', size, params={
-                    "newClientOrderId": self.clientId,
-                    'reduceOnly': True,
-                    'stopPrice': stop_loss,
-                })
-                self.create_string()
-                exchange.create_order(symbol, 'TAKE_PROFIT', 'Buy', size, take_profit, params={
-                    "newClientOrderId": self.clientId,
-                    'reduceOnly': True,
-                    'stopPrice': take_profit,
-                })
-
-        elif data['order_mode'] == 'Profit':
-            if data['side'] == 'Buy':
-                self.create_string()
-                exchange.create_order(symbol, 'TAKE_PROFIT', 'Sell', size, params={
-                    "newClientOrderId": self.clientId,
-                    'reduceOnly': True,
-                    'stopPrice': take_profit,
-                })
+                print("No open position to close.")
+                return
+            self.create_string()
+            params = {
+                "newClientOrderId": self.clientId,
+                'reduceOnly': True
+            }
+            if float(position) > 0:
+                print("Closing Long Position")
+                order = self.exchange.create_order(symbol, 'MARKET', 'SELL', float(position), params=params)
+                return self._extract_order_info(order)
+            elif float(position) < 0:
+                print("Closing Short Position")
+                order = self.exchange.create_order(symbol, 'MARKET', 'BUY', -float(position), params=params)
+                return self._extract_order_info(order)
             else:
-                self.create_string()
-                exchange.create_order(symbol, 'TAKE_PROFIT', 'Buy', size, take_profit, params={
-                    "newClientOrderId": self.clientId,
-                    'reduceOnly': True,
-                    'stopPrice': take_profit,
-                })
-        elif data['order_mode'] == 'Stop':
-            if data['side'] == 'Buy':
-                self.create_string()
-                exchange.create_order(symbol, 'STOP_MARKET', 'Sell', size, params={
-                    "newClientOrderId": self.clientId,
-                    'reduceOnly': True,
-                    'stopPrice': stop_loss,
-                })
-            else:
-                self.create_string()
-                exchange.create_order(symbol, 'STOP_MARKET', 'Buy', size, params={
-                    "newClientOrderId": self.clientId,
-                    'reduceOnly': True,
-                    'stopPrice': stop_loss,
-                })
-
-
-
+                print("No position to close.")
+        except Exception as e:
+            print(f"Error closing position: {e}")
 
     def run(self, data):
-        close_position = data.get('close_position', 'False') 
+        close_position = data.get('close_position', 'False')
         print(close_position)
+        order_results = []
         if close_position == 'True':
             print("Closing Position")
-            self.close_position(symbol=data['symbol'])
+            result = self.close_position(symbol=data['symbol'])
+            order_results.append(result)
         else:
             if 'cancel_orders' in data:
                 print("Cancelling Order")
-                exchange.cancel_all_orders(symbol=data['symbol'])
+                try:
+                    cancel_result = self.exchange.cancel_all_orders(symbol=data['symbol'])
+                    order_results.append(cancel_result)
+                except Exception as e:
+                    print(f"Error cancelling orders: {e}")
+                    order_results.append({'error': str(e)})
             if 'type' in data:
                 print("Placing Order")
-                if 'price' in data:
-                    price = data['price']
-                else:
-                    price = 0
-
-                # Calculate qty based on USD if 'qty' is interpreted as USD value
+                price = data.get('price', 0)
                 if 'usd_value' in data:
-                    qty = calculate_qty(data['symbol'], data['usd_value'])
+                    qty = self.calculate_qty(data['symbol'], data['usd_value'])
                 else:
                     qty = float(data['qty'])
-                    
-                if data['order_mode'] == 'Both':
-                    take_profit_percent = float(data['take_profit_percent']) / 100
-                    stop_loss_percent = float(data['stop_loss_percent']) / 100
-                    current_price = exchange.fetch_ticker(data['symbol'])['last']
-                    if data['side'] == 'Buy':
-                        take_profit_price = round(float(current_price) + (float(current_price) * take_profit_percent),
-                                                  2)
-                        stop_loss_price = round(float(current_price) - (float(current_price) * stop_loss_percent), 2)
-                    elif data['side'] == 'Sell':
-                        take_profit_price = round(float(current_price) - (float(current_price) * take_profit_percent),
-                                                  2)
-                        stop_loss_price = round(float(current_price) + (float(current_price) * stop_loss_percent), 2)
-
-                    print("Take Profit Price: " + str(take_profit_price))
-                    print("Stop Loss Price: " + str(stop_loss_price))
-
-                    self.create_string()
-                    params = {
-                        "newClientOrderId": self.clientId,
-                        'reduceOnly': False
-                    }
-                    if data['type'] == 'Limit':
-                        exchange.create_order(data['symbol'], data['type'], data['side'], qty,
-                                              price=float(price), params=params)
+                try:
+                    if data['order_mode'] == 'Both':
+                        take_profit_percent = float(data['take_profit_percent']) / 100
+                        stop_loss_percent = float(data['stop_loss_percent']) / 100
+                        current_price = self.exchange.fetch_ticker(data['symbol'])['last']
+                        if data['side'] == 'Buy':
+                            take_profit_price = round(float(current_price) + (float(current_price) * take_profit_percent), 2)
+                            stop_loss_price = round(float(current_price) - (float(current_price) * stop_loss_percent), 2)
+                        elif data['side'] == 'Sell':
+                            take_profit_price = round(float(current_price) - (float(current_price) * take_profit_percent), 2)
+                            stop_loss_price = round(float(current_price) + (float(current_price) * stop_loss_percent), 2)
+                        print("Take Profit Price: " + str(take_profit_price))
+                        print("Stop Loss Price: " + str(stop_loss_price))
+                        self.create_string()
+                        params = {
+                            "newClientOrderId": self.clientId,
+                            'reduceOnly': False
+                        }
+                        if data['type'] == 'Limit':
+                            order = self.exchange.create_order(data['symbol'], data['type'], data['side'], qty, price=float(price), params=params)
+                        else:
+                            order = self.exchange.create_order(data['symbol'], data['type'], data['side'], qty, params=params)
+                        order_results.append(self._extract_order_info(order))
+                        # Set risk orders
+                        risk_results = self.set_risk(data['symbol'], data, stop_loss_price, take_profit_price)
+                        if risk_results:
+                            order_results.extend(risk_results)
+                    elif data['order_mode'] == 'Profit':
+                        take_profit_percent = float(data['take_profit_percent']) / 100
+                        current_price = self.exchange.fetch_ticker(data['symbol'])['last']
+                        if data['side'] == 'Buy':
+                            take_profit_price = round(float(current_price) + (float(current_price) * take_profit_percent), 2)
+                        elif data['side'] == 'Sell':
+                            take_profit_price = round(float(current_price) - (float(current_price) * take_profit_percent), 2)
+                        print("Take Profit Price: " + str(take_profit_price))
+                        self.create_string()
+                        params = {
+                            "newClientOrderId": self.clientId,
+                            'reduceOnly': False
+                        }
+                        if data['type'] == 'Limit':
+                            order = self.exchange.create_order(data['symbol'], data['type'], data['side'], qty, price=float(price), params=params)
+                        else:
+                            order = self.exchange.create_order(data['symbol'], data['type'], data['side'], qty, params=params)
+                        order_results.append(self._extract_order_info(order))
+                        risk_results = self.set_risk(data['symbol'], data, 0, take_profit_price)
+                        if risk_results:
+                            order_results.extend(risk_results)
+                    elif data['order_mode'] == 'Stop':
+                        stop_loss_percent = float(data['stop_loss_percent']) / 100
+                        current_price = self.exchange.fetch_ticker(data['symbol'])['last']
+                        if data['side'] == 'Buy':
+                            stop_loss_price = round(float(current_price) - (float(current_price) * stop_loss_percent), 2)
+                        elif data['side'] == 'Sell':
+                            stop_loss_price = round(float(current_price) + (float(current_price) * stop_loss_percent), 2)
+                        print("Stop Loss Price: " + str(stop_loss_price))
+                        self.create_string()
+                        params = {
+                            "newClientOrderId": self.clientId,
+                            'reduceOnly': False
+                        }
+                        if data['type'] == 'Limit':
+                            order = self.exchange.create_order(data['symbol'], data['type'], data['side'], qty, price=float(price), params=params)
+                        else:
+                            order = self.exchange.create_order(data['symbol'], data['type'], data['side'], qty, params=params)
+                        order_results.append(self._extract_order_info(order))
+                        risk_results = self.set_risk(data['symbol'], data, stop_loss_price, 0)
+                        if risk_results:
+                            order_results.extend(risk_results)
                     else:
-                        exchange.create_order(data['symbol'], data['type'], data['side'], qty,
-                                              params=params)
+                        order_results.append({'status': 'error'})
+                except Exception as e:
+                    print(f"Error placing order: {e}")
+                    order_results.append({'error': str(e)})
+        return order_results
 
-                    self.set_risk(data['symbol'], data, stop_loss_price, take_profit_price)
-
-
-                elif data['order_mode'] == 'Profit':
-                    take_profit_percent = float(data['take_profit_percent']) / 100
-                    current_price = exchange.fetch_ticker(data['symbol'])['last']
-
-                    if data['side'] == 'Buy':
-                        take_profit_price = round(float(current_price) + (float(current_price) * take_profit_percent),
-                                                  2)
-                    elif data['side'] == 'Sell':
-                        take_profit_price = round(float(current_price) - (float(current_price) * take_profit_percent),
-                                                  2)
-
-                    print("Take Profit Price: " + str(take_profit_price))
-
+    def set_risk(self, symbol, data, stop_loss, take_profit):
+        results = []
+        try:
+            position = self.exchange.fetch_positions(symbol)
+            if not position:
+                print("No open position for risk management.")
+                return results
+            size = abs(float(position[0]['info']['positionAmt']))
+            if data['order_mode'] == 'Both':
+                if data['side'] == 'Buy':
                     self.create_string()
-                    params = {
+                    order1 = self.exchange.create_order(symbol, 'STOP_MARKET', 'SELL', size, params={
                         "newClientOrderId": self.clientId,
-                        'reduceOnly': False
-                    }
-
-                    if data['type'] == 'Limit':
-                        exchange.create_order(data['symbol'], data['type'], data['side'], qty,
-                                              price=float(price), params=params)
-                    else:
-                        exchange.create_order(data['symbol'], data['type'], data['side'], qty,
-                                              params=params)
-
-                    self.set_risk(data['symbol'], data, 0, take_profit_price)
-
-
-                elif data['order_mode'] == 'Stop':
-                    stop_loss_percent = float(data['stop_loss_percent']) / 100
-                    current_price = exchange.fetch_ticker(data['symbol'])['last']
-
-                    if data['side'] == 'Buy':
-                        stop_loss_price = round(float(current_price) - (float(current_price) * stop_loss_percent), 2)
-                    elif data['side'] == 'Sell':
-                        stop_loss_price = round(float(current_price) + (float(current_price) * stop_loss_percent), 2)
-
-                    print("Stop Loss Price: " + str(stop_loss_price))
-
+                        'reduceOnly': True,
+                        'stopPrice': stop_loss,
+                    })
+                    results.append(self._extract_order_info(order1))
                     self.create_string()
-                    params = {
+                    order2 = self.exchange.create_order(symbol, 'TAKE_PROFIT_MARKET', 'SELL', size, params={
                         "newClientOrderId": self.clientId,
-                        'reduceOnly': False
-                    }
-
-                    if data['type'] == 'Limit':
-                        exchange.create_order(data['symbol'], data['type'], data['side'], qty,
-                                              price=float(price), params=params)
-                    else:
-                        exchange.create_order(data['symbol'], data['type'], data['side'], qty,
-                                              params=params)
-
-                    self.set_risk(data['symbol'], data, stop_loss_price, 0)
-
+                        'reduceOnly': True,
+                        'stopPrice': take_profit,
+                    })
+                    results.append(self._extract_order_info(order2))
                 else:
-                    return {
-                        'status': 'error'
-                    }
+                    self.create_string()
+                    order1 = self.exchange.create_order(symbol, 'STOP_MARKET', 'BUY', size, params={
+                        "newClientOrderId": self.clientId,
+                        'reduceOnly': True,
+                        'stopPrice': stop_loss,
+                    })
+                    results.append(self._extract_order_info(order1))
+                    self.create_string()
+                    order2 = self.exchange.create_order(symbol, 'TAKE_PROFIT_MARKET', 'BUY', size, params={
+                        "newClientOrderId": self.clientId,
+                        'reduceOnly': True,
+                        'stopPrice': take_profit,
+                    })
+                    results.append(self._extract_order_info(order2))
+            elif data['order_mode'] == 'Profit':
+                if data['side'] == 'Buy':
+                    self.create_string()
+                    order = self.exchange.create_order(symbol, 'TAKE_PROFIT_MARKET', 'SELL', size, params={
+                        "newClientOrderId": self.clientId,
+                        'reduceOnly': True,
+                        'stopPrice': take_profit,
+                    })
+                    results.append(self._extract_order_info(order))
+                else:
+                    self.create_string()
+                    order = self.exchange.create_order(symbol, 'TAKE_PROFIT_MARKET', 'BUY', size, params={
+                        "newClientOrderId": self.clientId,
+                        'reduceOnly': True,
+                        'stopPrice': take_profit,
+                    })
+                    results.append(self._extract_order_info(order))
+            elif data['order_mode'] == 'Stop':
+                if data['side'] == 'Buy':
+                    self.create_string()
+                    order = self.exchange.create_order(symbol, 'STOP_MARKET', 'SELL', size, params={
+                        "newClientOrderId": self.clientId,
+                        'reduceOnly': True,
+                        'stopPrice': stop_loss,
+                    })
+                    results.append(self._extract_order_info(order))
+                else:
+                    self.create_string()
+                    order = self.exchange.create_order(symbol, 'STOP_MARKET', 'BUY', size, params={
+                        "newClientOrderId": self.clientId,
+                        'reduceOnly': True,
+                        'stopPrice': stop_loss,
+                    })
+                    results.append(self._extract_order_info(order))
+        except Exception as e:
+            print(f"Error in set_risk: {e}")
+            results.append({'error': str(e)})
+        return results
 
-    def get_balance(asset='USDT'):
-        balance = exchange.fetch_balance()
-        futures_balance = balance['total']
-    
-        if asset in futures_balance:
-            print(f"{asset} Balance: {futures_balance[asset]}")
-            return futures_balance[asset]
-        else:
-            print(f"{asset} not found in account balance.")
+    def _extract_order_info(self, order):
+        # Extract order id and status from the order response
+        return {
+            'order_id': order.get('id'),
+            'status': order.get('status'),
+            'info': order.get('info', {})
+        }
+
+    def get_balance(self, asset='USDT'):
+        try:
+            balance = self.exchange.fetch_balance()
+            futures_balance = balance['total']
+            if asset in futures_balance:
+                print(f"{asset} Balance: {futures_balance[asset]}")
+                return futures_balance[asset]
+            else:
+                print(f"{asset} not found in account balance.")
+                return 0
+        except Exception as e:
+            print(f"Error fetching balance: {e}")
             return 0
 
-    def get_full_balance():
-        balance = exchange.fetch_balance()
-        print(json.dumps(balance, indent=4))
+    def get_full_balance(self):
+        try:
+            balance = self.exchange.fetch_balance()
+            print(json.dumps(balance, indent=4))
+            return balance
+        except Exception as e:
+            print(f"Error fetching full balance: {e}")
+            return {}
