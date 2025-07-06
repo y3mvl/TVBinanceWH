@@ -4,6 +4,9 @@ import time
 import ccxt
 import random
 import string
+import logging
+
+logger = logging.getLogger(__name__)
 
 class BinanceBot:
     def __init__(self):
@@ -16,8 +19,8 @@ class BinanceBot:
                 },
                 'urls': {
                     'api': {
-                        'public': 'https://testnet.binancefuture.com/fapi/v1',
-                        'private': 'https://testnet.binancefuture.com/fapi/v1',
+                        'public': 'https://testnet.binancefuture.com/fapi/v2',
+                        'private': 'https://testnet.binancefuture.com/fapi/v2',
                     }, }
             })
             self.exchange.set_sandbox_mode(True)
@@ -30,8 +33,8 @@ class BinanceBot:
                 },
                 'urls': {
                     'api': {
-                        'public': 'https://fapi.binance.com/fapi/v1',
-                        'private': 'https://fapi.binance.com/fapi/v1',
+                        'public': 'https://fapi.binance.com/fapi/v2',
+                        'private': 'https://fapi.binance.com/fapi/v2',
                     }, }
             })
         self.clientId = None
@@ -48,9 +51,10 @@ class BinanceBot:
             ticker = self.exchange.fetch_ticker(symbol)
             current_price = ticker['last']
             qty = round(float(usd_amount) / current_price, 3)
+            logger.info(f"Calculated qty for {symbol}: {qty} at price {current_price}")
             return qty
         except Exception as e:
-            print(f"Error calculating qty: {e}")
+            logger.error(f"Error calculating qty: {e}")
             return 0
 
     def close_position(self, symbol):
@@ -59,7 +63,7 @@ class BinanceBot:
             if positions:
                 position = positions[0].get('positionAmt', 0)
             else:
-                print("No open position to close.")
+                logger.info("No open position to close.")
                 return
             self.create_string()
             params = {
@@ -67,37 +71,39 @@ class BinanceBot:
                 'reduceOnly': True
             }
             if float(position) > 0:
-                print("Closing Long Position")
-                order = self.exchange.create_order(symbol, 'MARKET', 'SELL', float(position), params=params)
-                return self._extract_order_info(order)
+                logger.info(f"Closing Long Position for {symbol}")
+                result = self.exchange.create_order(symbol, 'MARKET', 'SELL', float(position), params=params)
+                logger.info(f"Close order result: {result}")
+                return self._extract_order_info(result)
             elif float(position) < 0:
-                print("Closing Short Position")
-                order = self.exchange.create_order(symbol, 'MARKET', 'BUY', -float(position), params=params)
-                return self._extract_order_info(order)
+                logger.info(f"Closing Short Position for {symbol}")
+                result = self.exchange.create_order(symbol, 'MARKET', 'BUY', -float(position), params=params)
+                logger.info(f"Close order result: {result}")
+                return self._extract_order_info(result)
             else:
-                print("No position to close.")
+                logger.info("No position to close.")
         except Exception as e:
-            print(f"Error closing position: {e}")
+            logger.error(f"Error closing position: {e}")
 
     def run(self, data):
         close_position = data.get('close_position', 'False')
-        print(close_position)
+        logger.info(f"Close position flag: {close_position}")
         order_results = []
         if close_position == 'True':
-            print("Closing Position")
+            logger.info("Closing Position")
             result = self.close_position(symbol=data['symbol'])
             order_results.append(result)
         else:
             if 'cancel_orders' in data:
-                print("Cancelling Order")
+                logger.info("Cancelling Order")
                 try:
                     cancel_result = self.exchange.cancel_all_orders(symbol=data['symbol'])
                     order_results.append(cancel_result)
                 except Exception as e:
-                    print(f"Error cancelling orders: {e}")
+                    logger.error(f"Error cancelling orders: {e}")
                     order_results.append({'error': str(e)})
             if 'type' in data:
-                print("Placing Order")
+                logger.info("Placing Order")
                 price = data.get('price', 0)
                 if 'usd_value' in data:
                     qty = self.calculate_qty(data['symbol'], data['usd_value'])
@@ -114,8 +120,7 @@ class BinanceBot:
                         elif data['side'] == 'Sell':
                             take_profit_price = round(float(current_price) - (float(current_price) * take_profit_percent), 2)
                             stop_loss_price = round(float(current_price) + (float(current_price) * stop_loss_percent), 2)
-                        print("Take Profit Price: " + str(take_profit_price))
-                        print("Stop Loss Price: " + str(stop_loss_price))
+                        logger.info(f"Take Profit Price: {take_profit_price}, Stop Loss Price: {stop_loss_price}")
                         self.create_string()
                         params = {
                             "newClientOrderId": self.clientId,
@@ -137,7 +142,7 @@ class BinanceBot:
                             take_profit_price = round(float(current_price) + (float(current_price) * take_profit_percent), 2)
                         elif data['side'] == 'Sell':
                             take_profit_price = round(float(current_price) - (float(current_price) * take_profit_percent), 2)
-                        print("Take Profit Price: " + str(take_profit_price))
+                        logger.info(f"Take Profit Price: {take_profit_price}")
                         self.create_string()
                         params = {
                             "newClientOrderId": self.clientId,
@@ -158,7 +163,7 @@ class BinanceBot:
                             stop_loss_price = round(float(current_price) - (float(current_price) * stop_loss_percent), 2)
                         elif data['side'] == 'Sell':
                             stop_loss_price = round(float(current_price) + (float(current_price) * stop_loss_percent), 2)
-                        print("Stop Loss Price: " + str(stop_loss_price))
+                        logger.info(f"Stop Loss Price: {stop_loss_price}")
                         self.create_string()
                         params = {
                             "newClientOrderId": self.clientId,
@@ -175,16 +180,17 @@ class BinanceBot:
                     else:
                         order_results.append({'status': 'error'})
                 except Exception as e:
-                    print(f"Error placing order: {e}")
+                    logger.error(f"Error placing order: {e}")
                     order_results.append({'error': str(e)})
         return order_results
 
     def set_risk(self, symbol, data, stop_loss, take_profit):
         results = []
         try:
-            position = self.exchange.fetch_positions(symbol)
+            # fetch_positions expects a list of symbols for Binance
+            position = self.exchange.fetch_positions([symbol])
             if not position:
-                print("No open position for risk management.")
+                logger.info("No open position for risk management.")
                 return results
             size = abs(float(position[0]['info']['positionAmt']))
             if data['order_mode'] == 'Both':
@@ -253,7 +259,7 @@ class BinanceBot:
                     })
                     results.append(self._extract_order_info(order))
         except Exception as e:
-            print(f"Error in set_risk: {e}")
+            logger.error(f"Error in set_risk: {e}")
             results.append({'error': str(e)})
         return results
 
@@ -270,20 +276,20 @@ class BinanceBot:
             balance = self.exchange.fetch_balance()
             futures_balance = balance['total']
             if asset in futures_balance:
-                print(f"{asset} Balance: {futures_balance[asset]}")
+                logger.info(f"{asset} Balance: {futures_balance[asset]}")
                 return futures_balance[asset]
             else:
-                print(f"{asset} not found in account balance.")
+                logger.warning(f"{asset} not found in account balance.")
                 return 0
         except Exception as e:
-            print(f"Error fetching balance: {e}")
+            logger.error(f"Error fetching balance: {e}")
             return 0
 
     def get_full_balance(self):
         try:
             balance = self.exchange.fetch_balance()
-            print(json.dumps(balance, indent=4))
+            logger.info(f"Full balance: {balance}")
             return balance
         except Exception as e:
-            print(f"Error fetching full balance: {e}")
+            logger.error(f"Error fetching full balance: {e}")
             return {}

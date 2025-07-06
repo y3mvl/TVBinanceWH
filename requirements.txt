@@ -1,3 +1,4 @@
 flask
 gunicorn
 ccxt==2.2.37
+python-dotenv==1.0.0
